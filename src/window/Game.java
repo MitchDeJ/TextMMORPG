@@ -1,6 +1,15 @@
 package window;
 
 import java.awt.Canvas;
+import java.awt.Graphics;
+import java.awt.image.BufferStrategy;
+
+import net.PacketParser;
+import net.PacketReceiver;
+import net.ServerConnection;
+import packets.Packet03Quit;
+import window.screens.LoginScreen;
+import window.screens.Screen;
 
 public class Game extends Canvas implements Runnable {
 
@@ -9,16 +18,47 @@ public class Game extends Canvas implements Runnable {
 	private boolean running = false;
 	private Thread thread;
 	
+	//Current screen we want to render
+	private Screen currentScreen;
+	
+	//Networking
+	private ServerConnection connection;
+	private PacketReceiver packetReceiver;
+	private PacketParser packetParser;
+	
+	//graphics
+	BufferStrategy bs = this.getBufferStrategy();
+	Graphics g;
+	
+	
 	public static void main(String args[]) {
-		new Window(1280, 720, "Text MMORPG", new Game());
+		new Window(1024, 768, "Affliction", new Game());
 	}
 	
 	private void init() {	//this will be executed before we enter the game loop
-
+		addMouseListener(new MouseHandler(this));
+		setFocusTraversalKeysEnabled(false);
+		addKeyListener(new KeyHandler(this));
+		
+		connection = new ServerConnection("localhost", 1337);
+		packetReceiver = new PacketReceiver(this);
+		packetParser = new PacketParser(this);
+		
+		packetReceiver.start();
+		
+		LoginScreen logScreen = new LoginScreen();	
+		currentScreen = logScreen;
+		
+		/*Making sure the server knows when we quit*/
+		Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+		    public void run() {
+		        Packet03Quit quitPacket = new Packet03Quit();
+		        quitPacket.writeData(getConnection());
+		    }
+		}));
 	}
 	
 	public void run() {
-		
 		init();
 		this.requestFocus();
 		
@@ -39,6 +79,13 @@ public class Game extends Canvas implements Runnable {
 				updates++;
 				delta--;
 			}
+			
+            try {
+                Thread.sleep(5);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+			
 			render();
 			frames++;
 					
@@ -53,11 +100,25 @@ public class Game extends Canvas implements Runnable {
 	}
 	
 	private void render() {
+		BufferStrategy bs = this.getBufferStrategy();
+		if (bs == null) {
+			this.createBufferStrategy(3);
+			return;
+		}
+		
+		g = bs.getDrawGraphics();
+		
+		/*RENDERING CODE*/
+		currentScreen.render(g);
+		/*END OF RENDERING CODE*/
+		
+		g.dispose();
+		bs.show();
 				
 	}
 
 	private void tick() {
-				
+
 	}
 
 	public synchronized void start() {
@@ -70,5 +131,22 @@ public class Game extends Canvas implements Runnable {
 		thread.start();
 		
 	}
+	
+	public PacketParser getPacketParser() {
+		return packetParser;
+	}
+
+	public ServerConnection getConnection() {
+		return connection;
+	}
+	
+	public Screen getCurrentScreen() {
+		return currentScreen;
+	}
+
+	public void setCurrentScreen(Screen switchto) {
+		this.currentScreen = switchto;
+	}
+	
 
 }
